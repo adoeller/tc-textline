@@ -8,6 +8,7 @@ columns, the search dialog, tooltips, and multi-rename.
 - Lazarus/FPC port + extensions (32/64-bit, last-line & line-count fields,
   automatic Unicode detection, `SkipEmpty`)
 
+![textline](textline.png)
 ---
 
 ## Fields
