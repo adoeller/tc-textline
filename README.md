@@ -9,6 +9,7 @@ columns, the search dialog, tooltips, and multi-rename.
   automatic Unicode and line-ending detection, `SkipEmpty`)
 
 ![textline](textline.png)
+![columns](columns.png)
 
 # Text Line
 
