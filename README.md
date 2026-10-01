@@ -6,9 +6,11 @@ columns, the search dialog, tooltips, and multi-rename.
 
 - Original by Alexey Fomin (`http://ledsoft.narod.ru`)
 - Lazarus/FPC port + extensions (32/64-bit, last-line & line-count fields,
-  automatic Unicode detection, `SkipEmpty`)
+  automatic Unicode and line-ending detection, `SkipEmpty`)
 
 ![textline](textline.png)
+
+# Text Line
 
 ---
 
@@ -23,6 +25,7 @@ columns, the search dialog, tooltips, and multi-rename.
 | `Line count`  | Total number of lines                     | numeric |
 | `Encoding`    | Detected text encoding or binary data     | choice  |
 | `Type`        | Folder, binary file, or text file          | choice  |
+| `Line ending` | Detected line-ending convention            | choice  |
 
 The text fields expose two **units**:
 
@@ -51,9 +54,33 @@ matching EncInfo's naming. `Type` reports `Folder`, `Binary`, or `Text`.
 Detection reuses the small cached header and never requires a separate file
 read. The DOS and Russian heuristics run only when `Encoding` is requested.
 
-`Type` and `Encoding` work independently of the `Extensions` filter. Their
-classification is lazy and does not add work to ordinary line or line-count
-queries.
+`Type`, `Encoding`, and `Line ending` work independently of the `Extensions`
+filter. Their classification is lazy and does not add work to ordinary line
+or line-count queries.
+
+## Line endings
+
+For text files, `Line ending` reports:
+
+| Value | Delimiter found in the cached file header |
+|---|---|
+| `Windows` | CRLF (`\r\n`) |
+| `Unix` | LF (`\n`) |
+| `Mac` | CR (`\r`, classic Mac style) |
+| `Mixed` | More than one of the above styles |
+| `None` | No complete line delimiter was found |
+
+The field is calculated only when explicitly requested. It scans the same
+cached header used for type and encoding detection (at most 64 KiB), so it
+does not read any additional file data. UTF-8, legacy single-byte text, and
+UTF-16 LE/BE are handled without converting the complete file. Binary files
+and folders return an empty field.
+
+For files larger than 64 KiB, the result describes the cached header. A CR at
+the exact end of a partial header is not counted as `Mac`, because its matching
+LF may be the next byte outside the cache. The `Mac` result is detection
+metadata; the existing line fields continue to use LF as their primary line
+separator.
 
 ---
 
@@ -92,6 +119,52 @@ RusWordLen=0
 S1=
 ```
 
+### Replacement rules and escaping (planned)
+
+Replacement rules use the form:
+
+```ini
+S<n>=<search>=<replacement>
+```
+
+The first unescaped `=` separates the search text from the replacement. A
+backslash escapes characters which would otherwise be ambiguous:
+
+| Sequence | Literal character |
+|----------|-------------------|
+| `\=`     | `=`               |
+| `\\`    | `\`               |
+| `\"`    | `"`               |
+
+Examples:
+
+```ini
+[Replaces]
+; Replace "=" with ":".
+S1=\==:
+
+; Replace "\" with "/".
+S2=\\=/
+
+; Replace a double quote with an apostrophe.
+S3=\"='
+
+; Replace "a" with "=", "\", or a double quote.
+S4=a=\=
+S5=a=\\
+S6=a=\"
+
+; Remove "=".
+S7=\==
+```
+
+Escaping is decoded in both the search and replacement parts. Additional
+unescaped `=` characters after the separator remain part of the replacement,
+so existing rules continue to work. Unknown sequences such as `\T` and a
+backslash at the end of a value remain literal backslashes; Windows paths such
+as `C:\Temp` therefore do not need to be rewritten. Rules without a separator
+or with an empty search text are ignored.
+
 ### `SkipEmpty`
 
 When set to `1`, empty (whitespace-only) lines are ignored:
@@ -106,9 +179,11 @@ When set to `1`, empty (whitespace-only) lines are ignored:
 
 - Results are cached per file (keyed by name, size and timestamp); repeated
   field queries for the same file are served from memory.
-- The three result groups — top lines, bottom lines, line count — are built
-  **lazily and independently**: asking only for line 1 never reads the tail or
-  counts the lines.
+- The line result groups and the `Type`, `Encoding`, and `Line ending`
+  metadata are built **lazily and independently**. Asking only for line 1 does
+  not calculate unrequested metadata, read the tail, or count the lines.
+- `Line ending` scans only the already cached header (at most 64 KiB) and does
+  not cause another read.
 - Large files are **not** read in full for the line fields: only a head / tail
   window is scanned (widened automatically if needed).
 - `Line count` streams the file once — and only when the field is actually used.
@@ -148,6 +223,10 @@ README.md
 ```
 
 ---
+
+## License
+
+As is, no warranty — freeware. Source included.
 
 ## Thanks
 
