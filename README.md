@@ -1,5 +1,16 @@
 # Text Line
 
+![textline](textline.png)
+![columns](columns.png)
+
+## Fields
+
+| Field         | Meaning                                   | Type    |
+|---------------|-------------------------------------------|---------|
+| `1` … `10`    | Line 1 to 10, counted from the top        | text    |
+| `-3`          | Third line from the end                   | text    |
+# Text Line
+
 A **content (WDX) plugin for [Total Commander](https://www.ghisler.com/)** that
 exposes individual lines of a text file as content fields — usable in custom
 columns, the search dialog, tooltips, and multi-rename.
@@ -7,11 +18,6 @@ columns, the search dialog, tooltips, and multi-rename.
 - Original by Alexey Fomin (`http://ledsoft.narod.ru`)
 - Lazarus/FPC port + extensions (32/64-bit, last-line & line-count fields,
   automatic Unicode and line-ending detection, `SkipEmpty`)
-
-![textline](textline.png)
-![columns](columns.png)
-
-# Text Line
 
 ---
 
@@ -26,7 +32,7 @@ columns, the search dialog, tooltips, and multi-rename.
 | `Line count`  | Total number of lines                     | numeric |
 | `Encoding`    | Detected text encoding or binary data     | choice  |
 | `Type`        | Folder, binary file, or text file          | choice  |
-| `Line ending` | Detected line-ending convention            | choice  |
+| `Line ending` | Detected line-ending convention            | text    |
 
 The text fields expose two **units**:
 
@@ -61,15 +67,21 @@ or line-count queries.
 
 ## Line endings
 
-For text files, `Line ending` reports:
+For text files, `Line ending` offers three selectable display formats. Each
+format names the same detected delimiter consistently:
 
-| Value | Delimiter found in the cached file header |
-|---|---|
-| `Windows` | CRLF (`\r\n`) |
-| `Unix` | LF (`\n`) |
-| `Mac` | CR (`\r`, classic Mac style) |
-| `Mixed` | More than one of the above styles |
-| `None` | No complete line delimiter was found |
+| Delimiter | `Chars` | `OS` | `Legacy` |
+|---|---|---|---|
+| CRLF (`\r\n`) | `CRLF` | `Win` | `DOS` |
+| LF (`\n`) | `LF` | `Linux` | `UNIX` |
+| CR (`\r`) | `CR` | `Mac` | `OS-9` |
+| More than one style | `Mix` | `Mix` | `Mix` |
+| No complete delimiter | `None` | `None` | `None` |
+
+Choose `Chars`, `OS`, or `Legacy` as the field unit in Total Commander. The
+default (`Chars`) is unambiguous and describes the actual bytes/code units;
+the other two formats are nomenclature aliases only and do not change the
+detection.
 
 The field is calculated only when explicitly requested. It scans the same
 cached header used for type and encoding detection (at most 64 KiB), so it
@@ -78,10 +90,10 @@ UTF-16 LE/BE are handled without converting the complete file. Binary files
 and folders return an empty field.
 
 For files larger than 64 KiB, the result describes the cached header. A CR at
-the exact end of a partial header is not counted as `Mac`, because its matching
-LF may be the next byte outside the cache. The `Mac` result is detection
-metadata; the existing line fields continue to use LF as their primary line
-separator.
+the exact end of a partial header is not counted as `CR`, because its matching
+LF may be the next byte outside the cache. The `CR` / `Mac` / `OS-9`
+classification is detection metadata; the existing line fields continue to
+use LF as their primary line separator.
 
 ---
 
@@ -233,3 +245,4 @@ As is, no warranty — freeware. Source included.
 
 - Christian Ghisler — for Total Commander
 - Alexey Torgashin — for the File Descriptions source
+
