@@ -1,5 +1,6 @@
 # Text Line
-
+![textline](textline.png)
+![columns](columns.png)
 A **content (WDX) plugin for [Total Commander](https://www.ghisler.com/)** that
 exposes individual lines of a text file as content fields — usable in custom
 columns, the search dialog, tooltips, and multi-rename.
