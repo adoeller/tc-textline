@@ -1,16 +1,5 @@
 # Text Line
 
-![textline](textline.png)
-![columns](columns.png)
-
-## Fields
-
-| Field         | Meaning                                   | Type    |
-|---------------|-------------------------------------------|---------|
-| `1` … `10`    | Line 1 to 10, counted from the top        | text    |
-| `-3`          | Third line from the end                   | text    |
-# Text Line
-
 A **content (WDX) plugin for [Total Commander](https://www.ghisler.com/)** that
 exposes individual lines of a text file as content fields — usable in custom
 columns, the search dialog, tooltips, and multi-rename.
@@ -34,14 +23,27 @@ columns, the search dialog, tooltips, and multi-rename.
 | `Type`        | Folder, binary file, or text file          | choice  |
 | `Line ending` | Detected line-ending convention            | text    |
 
-The text fields expose two **units**:
+The line fields (`1` … `10`, `-3`, `-2`, `-1`) expose these **units**:
 
 | Unit  | Meaning                                                      |
 |-------|--------------------------------------------------------------|
+| `cp1252` | Windows Western European (default) |
+| `cp1251` | Windows Cyrillic |
+| `cp1253` | Windows Greek |
+| `cp866` | DOS Cyrillic |
+| `cp737` | DOS Greek |
 | `win` | Interpret legacy single-byte text as the system **ANSI** code page |
 | `dos` | Interpret legacy single-byte text as the system **OEM (DOS)** code page |
 
-For Unicode files both units return the same correct text.
+For detected UTF-8 and UTF-16 files all units return the same Unicode text.
+The unit selects the source codepage only for legacy single-byte files;
+output is always Unicode, including in tooltips. No additional file reads or
+codepage heuristics are needed.
+
+`cp1252` is now the first unit and the default for unqualified line fields.
+For files using the system codepage, explicitly select `win` or `dos`.
+Their unit indices have changed from 0/1 to 5/6; integrations passing numeric
+unit indices must be updated.
 
 ---
 
@@ -51,9 +53,11 @@ The encoding of each file is **detected automatically**:
 
 - UTF-8 — with or without BOM
 - UTF-16 little-endian and big-endian — with or without BOM
-- otherwise legacy single-byte text (ANSI / OEM, selected by the unit)
+- otherwise legacy single-byte text (source codepage selected by the unit)
 
-Non-ASCII characters are returned correctly as Unicode.
+Non-ASCII characters are returned correctly as Unicode when the selected
+source codepage matches the file. The `Encoding` metadata field remains a
+heuristic classification and does not select or override the line-field unit.
 
 The `Encoding` field reports `UTF-16 LE`, `UTF-16 BE`, `UTF-8 BOM`,
 `UTF-8 no BOM`, `ANSI`, `ANSI Ru`, `DOS`, `DOS Ru`, `RTF`, or `Binary`,
@@ -245,4 +249,3 @@ As is, no warranty — freeware. Source included.
 
 - Christian Ghisler — for Total Commander
 - Alexey Torgashin — for the File Descriptions source
-
