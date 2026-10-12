@@ -41,7 +41,7 @@ The line fields (`1` … `10`, `-3`, `-2`, `-1`) expose these **units**:
 | `cp1255` | Windows Hebrew |
 | `cp1252` | Windows Western European (explicit selection) |
 
-For detected UTF-8 and UTF-16 files all units return the same Unicode text.
+For detected UTF-8, UTF-16 and UTF-32 files all units return the same Unicode text.
 The unit selects the source codepage only for legacy single-byte files;
 output is always Unicode, including in tooltips. No additional file reads or
 codepage heuristics are needed for explicitly selected codepages.
@@ -54,12 +54,12 @@ codepage, explicitly select `win` or `dos`.
 
 ### Automatic codepage selection
 
-Ude detection runs for a legacy text file when `Encoding` or an `auto` line
+Ude detection runs for a legacy text file when `Encoding.AUTO`, `Language` or an `auto` line
 field (including an unqualified/default line field) is requested. Both share
 the same result: requesting Encoding then lines, or lines then Encoding, never
 runs Ude twice for the cached file version. If Ude is uncertain, a native
 language-marker detector supplies a second-stage codepage candidate. Explicit codepage units, `Type`,
-`Line ending` and `Line count` do not invoke it. Already detected UTF-8/UTF-16,
+`Line ending`, `Line count` and `Encoding.ANSI_DOS` do not invoke it. Already detected UTF-8/UTF-16/UTF-32,
 binary files and RTF bypass Ude. Detection uses only the cached head (at most
 64 KiB), with no additional file-data reads. The cache is a single entry;
 switching to another file and back can require detection again.
@@ -67,9 +67,10 @@ switching to another file and back can require detection again.
 `AutoConfidencePercent` in `[Encoding]` is the minimum accepted Ude confidence
 on a 0..100 scale (default 80), shared with `Encoding`. Values are clamped to
 this range; invalid values use 80. Below the threshold, or when detection fails,
-the second stage is tried. If neither stage is accepted, `Encoding` returns
-`UnknownEncoding` (default `Unknown`). This is a display
-label, not a fallback codepage; blank labels use `Unknown`. For line decoding,
+the second stage is tried. If neither stage is accepted, `Encoding.AUTO` can
+still report `8-bit (CP unknown)` for plausible legacy text. Otherwise it returns
+`UnknownEncoding` (default `Unknown`). These are display
+labels, not fallback codepages; blank unknown labels use `Unknown`. For line decoding,
 `auto` falls back to `cp1252` when uncertain or no suitable Windows decoder is
 available. A confidently detected charset can still be reported by Encoding
 even if Windows cannot decode it. Confidence is a statistical
@@ -85,8 +86,8 @@ result; selecting a different unit does not modify the raw line cache.
 The second stage uses the 40-language word-marker models from
 [Detect-File-Encoding-And-Language](https://github.com/gignupg/Detect-File-Encoding-And-Language),
 ported natively to Pascal under MIT. `LanguageConfidencePercent` (0..100,
-default 80, invalid values use 80) controls acceptance of its encoding guess,
-independently of Ude's score. Accepted second-stage codepages include `CP 1250` through
+default 80, invalid values use 80) controls acceptance of its encoding guess
+and the displayed language, independently of Ude's score. Accepted second-stage codepages include `CP 1250` through
 `CP 1257`, e.g. Turkish `CP 1254` and Arabic/Persian `CP 1256`. No additional file
 data is read; this stage and the Language field share one cached result.
 
@@ -95,9 +96,10 @@ data is read; this stage and the Language field share one cached result.
 Use `[=TextLine.Language]` in a Total Commander column or tooltip. The new field
 is appended at index 17 without changing existing field indices. It returns the
 detector's English name with an uppercase initial, e.g. `German`, `Turkish`,
-`Arabic`, `Russian` or `Chinese-traditional`. With no marker matches it uses the
+`Arabic`, `Russian` or `Chinese-traditional`. With no sufficiently confident marker match it uses the
 accepted codepage's conventional principal language where a mapping exists,
-e.g. CP 1254 -> Turkish, CP 1255 -> Hebrew, CP 866 -> Russian. This fallback is
+e.g. CP 1254 -> `(Turkish)`, CP 1255 -> `(Hebrew)`, CP 866 -> `(Russian)`.
+Parentheses distinguish this fallback from an accepted language-detector result. This fallback is
 not a detected language: these codepages can also be used for related languages.
 Multilingual Western/Central-European/Baltic and Unicode codepages have no
 single language fallback and return `Unknown`. The CP1252 decoding fallback
@@ -107,9 +109,9 @@ files, RTF and folders return no value. Language names are guesses, not proof.
 On securely recognized files, language analysis runs only when Language is
 requested. Unicode/securely Ude-decoded content uses Unicode language patterns.
 If the detector already ran as the necessary second encoding stage, Language
-simply returns that cached result. The field reports the best matching language
-even if its score is below `LanguageConfidencePercent`; that cutoff applies only
-to choosing an encoding. More languages do not imply detection of every codepage:
+simply returns that cached result. The field uses `LanguageConfidencePercent`
+for display too: below the threshold it returns the parenthesized codepage
+fallback, or `Unknown` if no single language is mapped. More languages do not imply detection of every codepage:
 CP737 remains unsupported. Longer coherent prose is more reliable than tiny,
 structured or mixed-language files. See [port notes](Src/Language/README.md).
 
@@ -121,29 +123,71 @@ The encoding of each file is **detected automatically**:
 
 - UTF-8 — with or without BOM
 - UTF-16 little-endian and big-endian — with or without BOM
+- UTF-32 little-endian and big-endian — with or without BOM
 - otherwise legacy single-byte text (source codepage selected by the unit)
+
+BOM-less UTF-32 is inferred from valid text scalars in the first 4 KiB, with
+one unambiguous byte order. Like all BOM-less heuristics, it cannot prove the
+encoding of arbitrary binary data. UTF-32 BOMs are checked before UTF-16 BOMs.
+Invalid UTF-32 scalar values in BOM-tagged files are rendered as U+FFFD;
+an incomplete trailing scalar is ignored.
 
 Non-ASCII characters are returned correctly as Unicode when the selected
 source codepage matches the file. Explicit line-field units override automatic
 selection without changing the shared detection result.
 
-The `Encoding` field reports `UTF-16 LE`, `UTF-16 BE`, `UTF-8 BOM`,
+The `Encoding` field has units `AUTO` (index 0, default) and `ANSI_DOS` (index 1).
+`[=TextLine.Encoding]` / `[=TextLine.Encoding.AUTO]` use the new detection.
+`[=TextLine.Encoding.ANSI_DOS]` explicitly requests the historical classification.
+
+`AUTO` reports `UTF-16 LE BOM`, `UTF-16 LE no BOM`, `UTF-16 BE BOM`,
+`UTF-16 BE no BOM`, the corresponding four `UTF-32 LE/BE BOM/no BOM` labels, `UTF-8 BOM`,
 `UTF-8 no BOM`, `RTF`, `Binary`, or a normalized Windows codepage name such as
-`CP 20127` (ASCII), `CP 1251`, `CP 1255`, `CP 866`, `CP 20866` (KOI8-R), or
+`ASCII`, `CP 1251`, `CP 1255`, `CP 866`, `CP 20866` (KOI8-R), or
 `CP 28597` (ISO-8859-7). Both detection stages use the same `CP XXXX` notation.
 An accepted charset without an interchangeable Windows codepage (e.g. EUC-TW)
-retains its charset name. UTF-8/UTF-16 keep their existing labels/BOM information.
-Unknown or
-uncertain text (including empty files) returns the configurable label `Unknown`.
-The former `ANSI`/`ANSI Ru`/`DOS`/`DOS Ru` byte-range heuristics have been removed.
-Their Oem*/Rus* INI keys are ignored. `Encoding` is now a Unicode text field
+retains its charset name. ASCII means 7-bit content, not proof of the file's
+original codepage. Ude's NBSP exception is not reported as ASCII.
+If the codepage is uncertain, `AUTO` reports `8-bit (CP unknown)` only when the
+cached sample contains bytes above 127 and no NUL, DEL or C0 controls other
+than tab, CR and LF. This is a coarse legacy-text hypothesis, not proof of a
+single-byte encoding or a distinction between DOS/OEM and Windows/ANSI.
+Unrecognized Unicode or multibyte text can also be ambiguous. Empty files and
+samples that do not meet this check retain the configurable `Unknown` label.
+Only uncertain AUTO encoding queries inspect the cached sample (at most 64 KiB)
+for this hint. The result is cached; it requires no additional file-data reads
+or reruns of Ude/language detection. Neither the CP1252 preview fallback, the Language
+field nor `ANSI_DOS` is changed by this hint.
+
+| Detected format / available evidence | `Encoding.AUTO` |
+|---|---|
+| 7-bit ASCII content | `ASCII` |
+| Accepted legacy codepage | `CP XXXX` |
+| Plausible legacy text, uncertain codepage | `8-bit (CP unknown)` |
+| UTF-8 | `UTF-8 BOM` / `UTF-8 no BOM` |
+| UTF-16 | `UTF-16 LE/BE BOM/no BOM` |
+| UTF-32 | `UTF-32 LE/BE BOM/no BOM` |
+| Format also uncertain, or empty file | `UnknownEncoding` (default `Unknown`) |
+
+`ANSI_DOS` restores the former `ANSI`/`ANSI Ru`/`DOS`/`DOS Ru` byte-range
+heuristics, including DOS-before-Russian precedence. These are compatibility
+labels, not reliably detected codepages or languages; `ANSI` does not verify
+that the file matches the Windows ACP. ASCII text therefore reports `ANSI`
+in this mode. Unicode, RTF and binary files retain their classification;
+the legacy Unicode labels omit the UTF-16/UTF-32 BOM suffix.
+The Oem*/Rus* INI keys below affect only this explicitly requested unit.
+It has its own lazy result cache, never invokes Ude or the language detector,
+and never changes `AUTO` or line decoding. Both modes share the cached header,
+so comparing them does not read more file data.
+
+`Encoding` is a Unicode text field
 instead of a multiple-choice field, allowing arbitrary charset names and a
 Unicode unknown label; existing searches for old labels need updating.
 `Type` reports `Folder`, `Binary`, or `Text`. Detection reuses the cached header
 and never requires a separate file read.
 
 `Type`, `Encoding`, `Language`, and `Line ending` work independently of the `Extensions`
-filter. Classification is lazy; Ude does not add work to explicit-codepage or
+filter. Classification is lazy; Ude does not add work to `ANSI_DOS`, explicit-codepage or
 line-count queries.
 
 ## Line endings
@@ -167,7 +211,7 @@ detection.
 The field is calculated only when explicitly requested. It scans the same
 cached header used for type and encoding detection (at most 64 KiB), so it
 does not read any additional file data. UTF-8, legacy single-byte text, and
-UTF-16 LE/BE are handled without converting the complete file. Binary files
+UTF-16/UTF-32 LE/BE are handled without converting the complete file. Binary files
 and folders return an empty field.
 
 For files larger than 64 KiB, the result describes the cached header. A CR at
@@ -194,14 +238,25 @@ SkipEmpty=0
 [Encoding]
 ; Minimum confidence shared by Encoding and auto line decoding (0..100).
 AutoConfidencePercent=80
-; Minimum confidence for the language-based second encoding stage (0..100).
+; Minimum confidence for second-stage encoding AND language display (0..100).
 LanguageConfidencePercent=80
-; Encoding label for unknown/uncertain text. Empty values use Unknown.
+; Label when even the coarse format is uncertain (also empty files).
+; Plausible legacy text instead reports 8-bit (CP unknown).
 UnknownEncoding=Unknown
 ; Binary/Unicode detection buffers are KiB (maximum 64).
 TextBufferSizeKB=1
 Utf8BufferSizeKB=64
 BinaryIgnore=
+; Historical classifier: only used by Encoding.ANSI_DOS.
+OemEnabled=1
+OemBufferSizeKB=1
+OemPercent=18
+OemIgnore=AB BB
+RusEnabled=1
+RusBufferSizeKB=2
+RusMinSize=8
+RusPercent=30
+RusWordLen=0
 
 [Replaces]
 ; Rules of the form  S<n>=<search>=<replacement>  (S1..S20).
@@ -278,6 +333,26 @@ When set to `1`, empty (whitespace-only) lines are ignored:
 - Large files are **not** read in full for the line fields: only a head / tail
   window is scanned (widened automatically if needed).
 - `Line count` streams the file once — and only when the field is actually used.
+
+---
+
+## Building
+
+Open **`Src/TextLine.lpi`** in [Lazarus](https://www.lazarus-ide.org/) and build:
+
+| Build mode | Output           | Total Commander |
+|------------|------------------|-----------------|
+| `Win32`    | `TextLine.wdx`   | 32-bit          |
+| `Win64`    | `TextLine.wdx64` | 64-bit          |
+
+Copy the resulting `.wdx` / `.wdx64` (and `TextLine.ini`) into a plugin folder
+and install it via Total Commander's configuration
+(*Configuration → Options → Plugins → Content plugins*).
+
+The encoding/legacy-display regression and performance results are recorded in
+[the verification report](tests/verification-encoding-display.md).
+The coarse AUTO fallback and corrected library build are covered by
+[the subsequent verification](tests/verification-coarse-encoding.md).
 
 ---
 
